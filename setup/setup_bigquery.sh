@@ -27,10 +27,14 @@ echo "Creating BigQuery dataset: $DATASET"
 bq --location=US mk --dataset "$PROJECT_ID:$DATASET" || echo "Dataset may already exist, continuing."
 
 echo "Loading $CSV_PATH into $DATASET.$TABLE"
+# The source CSV has a handful of rows with a stray unescaped double-quote
+# in the Address field (breaks strict CSV quoting). --max_bad_records lets
+# bq load skip those few rows instead of failing the whole load.
 bq load \
   --autodetect \
   --source_format=CSV \
   --skip_leading_rows=1 \
+  --max_bad_records=20 \
   "$PROJECT_ID:$DATASET.$TABLE" \
   "$CSV_PATH"
 

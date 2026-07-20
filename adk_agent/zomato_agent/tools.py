@@ -1,18 +1,21 @@
 """
 Maps and BigQuery MCP toolsets for the Zomato location intelligence agent.
 
-Adapted from the bakery example in the GeeksforGeeks "Location Intelligence
-ADK Agent" walkthrough, over the Zomato restaurants dataset instead of the
-original demographics/sales/foot-traffic tables.
-
-NOTE: the exact MCP toolset wiring below (connection details, auth) is
-sketched out based on what the walkthrough showed, but hasn't been verified
-against the real google/mcp example repo yet. Before running this for real,
-check the current toolset classes/arguments in that repo, since MCP/ADK
-APIs are still young and can shift between versions.
+Adapted from the bakery example in google/mcp
+(examples/launchmybakery/adk_agent/mcp_bakery_app/tools.py), verified against
+that file's actual source on 2026-07-20.
 """
 
 import os
+
+import dotenv
+import google.auth
+import google.auth.transport.requests
+from google.adk.tools.mcp_tool.mcp_session_manager import StreamableHTTPConnectionParams
+from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
+
+MAPS_MCP_URL = "https://mapstools.googleapis.com/mcp"
+BIGQUERY_MCP_URL = "https://bigquery.googleapis.com/mcp"
 
 
 def get_maps_mcp_toolset():
@@ -26,41 +29,48 @@ def get_maps_mcp_toolset():
 
     Requires MAPS_API_KEY to be set in the environment.
     """
-    maps_api_key = os.environ["MAPS_API_KEY"]
+    dotenv.load_dotenv()
+    maps_api_key = os.getenv("MAPS_API_KEY", "no_api_found")
 
-    # TODO: verify the real MCPToolset import path and connection arguments
-    # against the current google/mcp example repo before running.
-    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
-
-    return MCPToolset(
-        connection_params={
-            "type": "streamable_http",
-            "api_key": maps_api_key,
-        },
+    tools = MCPToolset(
+        connection_params=StreamableHTTPConnectionParams(
+            url=MAPS_MCP_URL,
+            headers={
+                "X-Goog-Api-Key": maps_api_key,
+            },
+            timeout=30.0,
+            sse_read_timeout=300.0,
+        )
     )
+    print("MCP Toolset configured for Streamable HTTP connection.")
+    return tools
 
 
 def get_bigquery_mcp_toolset():
     """
-    Returns an MCP toolset connected to the BigQuery MCP server, scoped to
-    the zomato_agent_data.restaurants table created by
-    setup/setup_bigquery.sh.
-
-    Used for:
-    - SQL execution over restaurant data
-    - Cuisine/rating/cost-for-two analytics
+    Returns an MCP toolset connected to the BigQuery MCP server, authenticated
+    via the caller's own OAuth credentials against whichever GCP project is
+    active (the one holding the zomato_agent_data.restaurants table created
+    by setup/setup_bigquery.sh).
     """
-    project_id = os.environ["GOOGLE_CLOUD_PROJECT"]
-    dataset = os.environ.get("BIGQUERY_DATASET", "zomato_agent_data")
-
-    # TODO: verify the real MCPToolset import path and connection arguments
-    # against the current google/mcp example repo before running.
-    from google.adk.tools.mcp_tool.mcp_toolset import MCPToolset
-
-    return MCPToolset(
-        connection_params={
-            "type": "oauth",
-            "project_id": project_id,
-            "dataset": dataset,
-        },
+    credentials, project_id = google.auth.default(
+        scopes=["https://www.googleapis.com/auth/bigquery"]
     )
+    credentials.refresh(google.auth.transport.requests.Request())
+    oauth_token = credentials.token
+
+    headers_with_oauth = {
+        "Authorization": f"Bearer {oauth_token}",
+        "x-goog-user-project": project_id,
+    }
+
+    tools = MCPToolset(
+        connection_params=StreamableHTTPConnectionParams(
+            url=BIGQUERY_MCP_URL,
+            headers=headers_with_oauth,
+            timeout=30.0,
+            sse_read_timeout=300.0,
+        )
+    )
+    print("MCP Toolset configured for Streamable HTTP connection.")
+    return tools

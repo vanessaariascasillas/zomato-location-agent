@@ -1,40 +1,47 @@
 """
 Zomato location intelligence agent.
 
-Adapted from the bakery business intelligence agent in the GeeksforGeeks
-"Location Intelligence ADK Agent" walkthrough, over the Zomato restaurants
-dataset instead of the original bakery demographics/sales/foot-traffic setup.
+Adapted from the bakery business intelligence agent in google/mcp
+(examples/launchmybakery/adk_agent/mcp_bakery_app/agent.py), over the Zomato
+restaurants dataset instead of the original bakery demographics/sales/
+foot-traffic setup. Structure verified against that file's actual source
+on 2026-07-20.
 """
 
 import os
 
+import dotenv
 from google.adk.agents import LlmAgent
 
-from tools import get_bigquery_mcp_toolset, get_maps_mcp_toolset
+from zomato_agent import tools
 
-INSTRUCTIONS = """
-You are a restaurant location intelligence assistant. You help answer
-questions about restaurants using two data sources:
+dotenv.load_dotenv()
 
-1. A BigQuery table of Zomato restaurant data (name, city, location,
-   cuisines, average cost for two, price range, rating, votes, whether
-   they take online orders or table bookings).
-2. Google Maps, for real-world place search and distance/route questions.
+PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT", "project_not_set")
+DATASET = os.getenv("BIGQUERY_DATASET", "zomato_agent_data")
 
-Use the BigQuery tool for analytics questions (highest rated, cheapest,
-most common cuisine, average cost comparisons between cities). Use the
-Maps tool for real-world location questions (find restaurants near a
-place, distance between two points). Combine both when a question needs
-it, for example checking BigQuery ratings for restaurants Maps finds
-nearby.
-
-If a question is unrelated to restaurants or location intelligence,
-say so plainly instead of guessing at an answer.
-"""
+maps_toolset = tools.get_maps_mcp_toolset()
+bigquery_toolset = tools.get_bigquery_mcp_toolset()
 
 root_agent = LlmAgent(
-    model=os.environ.get("GEMINI_MODEL", "gemini-3.1-pro-preview"),
+    model=os.getenv("GEMINI_MODEL", "gemini-3.1-pro-preview"),
     name="zomato_location_agent",
-    instruction=INSTRUCTIONS,
-    tools=[get_bigquery_mcp_toolset(), get_maps_mcp_toolset()],
+    instruction=f"""
+                Help the user answer questions by strategically combining insights from two sources:
+
+                1.  **BigQuery toolset:** Access the `restaurants` table (name, city, location,
+                cuisines, average cost for two, price range, rating, votes, online order/table
+                booking availability) in the {DATASET} dataset. Do not use any other dataset.
+                Run all query jobs from project id: {PROJECT_ID}.
+
+                2.  **Maps toolset:** Use this for real-world location analysis, finding
+                nearby restaurants, and calculating routes/distances. Include a hyperlink to
+                an interactive map in your response where appropriate.
+
+                Combine both when a question needs it, for example checking BigQuery ratings
+                for restaurants the Maps toolset finds nearby. If a question is unrelated to
+                restaurants or location intelligence, say so plainly instead of guessing at
+                an answer.
+            """,
+    tools=[maps_toolset, bigquery_toolset],
 )

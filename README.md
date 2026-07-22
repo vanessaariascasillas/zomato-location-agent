@@ -92,3 +92,66 @@ Then open `http://127.0.0.1:8000` (or the Cloud Shell Web Preview on port 8000 i
 ```
 
 This README will get updated as each of these steps actually gets run for real, including fixing anything above that turns out to be wrong.
+
+---
+
+## Running Locally on Windows (VS Code)
+
+The steps above were written for Cloud Shell and have now been run there successfully. This section covers running the same project locally instead, in VS Code on Windows, where a few things differ enough to be worth their own steps.
+
+### Prerequisites
+
+- **Use a Git Bash terminal**, not PowerShell or Command Prompt. Every command in this README is a bash command (`export`, `./script.sh`, etc.). Git Bash comes bundled with Git for Windows, VS Code will list it as a terminal profile (click the dropdown next to the `+` in the terminal panel) if Git is already installed, no separate install needed.
+- `gcloud` and `bq` CLIs installed and authenticated (`gcloud auth login`), same as Cloud Shell but on your own machine
+
+### The `bq` Python path issue
+
+On Windows, `bq` may fail with an error like `python3.14: command not found` (the exact version number matches your installed Python). It's trying to invoke a version-specific Python executable name that doesn't exist on Windows (only `python.exe` does). Fix by pointing it at your real Python install before running any `bq` step:
+
+```bash
+export CLOUDSDK_PYTHON="C:/Python314/python.exe"   # adjust to your actual Python path, check with: where python
+```
+
+### Kaggle credentials, locally
+
+Same token-based flow as Cloud Shell (see step 1 above and the Learning Log for why it's a token, not a `kaggle.json` file), just set up on your own machine instead:
+
+```bash
+mkdir -p ~/.kaggle
+echo YOUR_TOKEN_HERE > ~/.kaggle/access_token
+chmod 600 ~/.kaggle/access_token
+```
+
+`~` resolves correctly in Git Bash to your Windows user profile folder, no path translation needed.
+
+### Venv activation path differs
+
+Windows venvs put executables in `Scripts/` instead of `bin/`:
+
+```bash
+python -m venv .venv
+source .venv/Scripts/activate   # not .venv/bin/activate like Cloud Shell/Linux/Mac
+pip install google-adk mcp
+```
+
+`mcp` needs to be installed separately from `google-adk`, newer ADK versions don't pull it in automatically even though MCP toolset support depends on it, same issue whether running locally or in Cloud Shell.
+
+### Running the agent
+
+Same as step 5 above:
+
+```bash
+cd adk_agent
+adk web --allow_origins 'regex:https://.*\.cloudshell\.dev'
+```
+
+The `--allow_origins` flag is only needed in Cloud Shell, harmless to leave in locally too. Open `http://127.0.0.1:8000` in your browser.
+
+**Finding and killing a stuck process on Windows**, if a later run fails with "address already in use":
+
+```bash
+netstat -ano | findstr :8000
+taskkill //PID <pid> //F
+```
+
+Everything else (the Maps API key setup, the BigQuery load, cleanup) is identical to the Cloud Shell steps above, nothing else about them is Windows-specific.

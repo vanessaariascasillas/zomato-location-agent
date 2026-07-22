@@ -154,4 +154,17 @@ netstat -ano | findstr :8000
 taskkill //PID <pid> //F
 ```
 
-Everything else (the Maps API key setup, the BigQuery load, cleanup) is identical to the Cloud Shell steps above, nothing else about them is Windows-specific.
+Everything else (the Maps API key setup, the BigQuery load) is identical to the Cloud Shell steps above, nothing else about them is Windows-specific.
+
+### Cleanup, locally
+
+`cleanup_env.sh` also calls `bq`, so if you're in a fresh terminal (not the same one you set `CLOUDSDK_PYTHON` in earlier), set it again before running cleanup:
+
+```bash
+export CLOUDSDK_PYTHON="C:/Python314/python.exe"
+export PROJECT_ID=$(gcloud config get-value project)
+cd cleanup
+./cleanup_env.sh
+```
+
+Ran end to end this way with no other issues, confirmed working locally.
